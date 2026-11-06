@@ -71,6 +71,7 @@ def main(out_path):
             dropped += 1
         else:
             kept += 1
+            print("KEEP", item.findtext("title"), "|", story_key(item))
 
     t = channel.find("title")
     if t is not None:
