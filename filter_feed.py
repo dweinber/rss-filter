@@ -7,6 +7,7 @@ Removes every Newsroom item whose link also appears in any EXCLUDE feed,
 plus "evergreen" items (pinned forum/community posts) older than MAX_AGE_DAYS.
 Standard library only.
 """
+import re
 import sys
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -20,6 +21,13 @@ EXCLUDE = [
     # "https://www.derstandard.at/rss/etat",
 ]
 MAX_AGE_DAYS = 14
+# Drop items whose title matches (case-insensitive): puzzles, quizzes and the like.
+# Kept specific so news headlines like "Rätsel um ..." are not caught.
+TITLE_EXCLUDE = re.compile(
+    r"sudoku|quiz|kreuzwort|schieberätsel|wortsuche|standardrätsel|"
+    r"bilderrätsel|buchstabensalat|kakuro|nonogramm|\brätsel (vom|der woche)\b",
+    re.IGNORECASE,
+)
 TITLE = "derStandard Newsroom (ohne Diskurs)"
 
 ET.register_namespace("media", "http://search.yahoo.com/mrss/")
@@ -57,7 +65,8 @@ def main(out_path):
                 too_old = parsedate_to_datetime(pub) < cutoff
             except (TypeError, ValueError):
                 pass
-        if story_key(item) in excluded or too_old:
+        is_puzzle = bool(TITLE_EXCLUDE.search(item.findtext("title") or ""))
+        if story_key(item) in excluded or too_old or is_puzzle:
             channel.remove(item)
             dropped += 1
         else:
