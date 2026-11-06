@@ -1,7 +1,10 @@
 # rss-filter
 
-Filtered derStandard Newsroom feed without Diskurs (opinion/community) items, old pinned posts, and puzzles/quizzes (Sudoku, Rätsel, Wortsuche, …).
+Filtered derStandard Newsroom feed: https://dweinber.github.io/rss-filter/newsroom.xml
 
-Feed: https://dweinber.github.io/rss-filter/newsroom.xml
+Removed:
+- Diskurs items (opinion/community) and old pinned posts
+- Sport items, except World/European Championship (WM/EM) stories
+- Puzzles and quizzes (Sudoku, Schieberätsel, Wortsuche, …)
 
-Rebuilt every 30 minutes by GitHub Actions. To drop more sections, add their feed URLs to `EXCLUDE` in `filter_feed.py`.
+Rebuilt every 30 minutes by GitHub Actions. Adjust `EXCLUDE` / `TITLE_EXCLUDE` in `filter_feed.py`.

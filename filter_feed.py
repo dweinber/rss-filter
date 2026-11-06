@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
-"""Build a derStandard Newsroom feed without Diskurs items (opinion/community).
+"""Build a filtered derStandard Newsroom feed.
 
 Usage: python filter_feed.py [output.xml]
 
-Removes every Newsroom item whose link also appears in any EXCLUDE feed,
-plus "evergreen" items (pinned forum/community posts) older than MAX_AGE_DAYS.
+Removes Newsroom items that
+  - also appear in a section feed listed in EXCLUDE (optionally with a
+    title pattern that rescues matching items),
+  - are "evergreen" pinned posts older than MAX_AGE_DAYS,
+  - have puzzle/quiz titles (TITLE_EXCLUDE).
 Standard library only.
 """
 import re
@@ -15,20 +18,28 @@ from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 
 SOURCE = "https://www.derstandard.at/rss"
-EXCLUDE = [
-    "https://www.derstandard.at/rss/diskurs",
-    # add more sections to drop, e.g.:
-    # "https://www.derstandard.at/rss/etat",
-]
+TITLE = "derStandard Newsroom (gefiltert)"
+
+# Section feeds to drop. Value: regex of titles to KEEP anyway, or None.
+EXCLUDE = {
+    "https://www.derstandard.at/rss/diskurs": None,
+    # Sport: drop everything except World/European Championship items
+    "https://www.derstandard.at/rss/sport": re.compile(
+        r"\b(WM|EM|Weltmeisterschaft|Europameisterschaft|Euro 20\d\d)\b"
+        r"|\w+-(WM|EM)\b|\b(WM|EM)-\w+"
+    ),
+    # add more, e.g. "https://www.derstandard.at/rss/etat": None,
+}
+
 MAX_AGE_DAYS = 14
-# Drop items whose title matches (case-insensitive): puzzles, quizzes and the like.
-# Kept specific so news headlines like "Rätsel um ..." are not caught.
+
+# Puzzles, quizzes and the like (case-insensitive). Kept specific so news
+# headlines like "Rätsel um ..." are not caught.
 TITLE_EXCLUDE = re.compile(
     r"sudoku|quiz|kreuzwort|schieberätsel|wortsuche|standardrätsel|"
     r"bilderrätsel|buchstabensalat|kakuro|nonogramm|\brätsel (vom|der woche)\b",
     re.IGNORECASE,
 )
-TITLE = "derStandard Newsroom (ohne Diskurs)"
 
 ET.register_namespace("media", "http://search.yahoo.com/mrss/")
 ET.register_namespace("atom", "http://www.w3.org/2005/Atom")
@@ -50,28 +61,42 @@ def main(out_path):
     source = fetch(SOURCE)
     channel = source.find("channel")
 
-    excluded = set()
-    for url in EXCLUDE:
+    # story key -> (section url, keep-pattern)
+    excluded = {}
+    for url, keep in EXCLUDE.items():
         for item in fetch(url).iter("item"):
-            excluded.add(story_key(item))
+            excluded[story_key(item)] = (url.rsplit("/", 1)[-1], keep)
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=MAX_AGE_DAYS)
     kept = dropped = 0
     for item in list(channel.findall("item")):
-        too_old = False
+        title = item.findtext("title") or ""
+        reason = None
+
         pub = item.findtext("pubDate")
         if pub:
             try:
-                too_old = parsedate_to_datetime(pub) < cutoff
+                if parsedate_to_datetime(pub) < cutoff:
+                    reason = "old"
             except (TypeError, ValueError):
                 pass
-        is_puzzle = bool(TITLE_EXCLUDE.search(item.findtext("title") or ""))
-        if story_key(item) in excluded or too_old or is_puzzle:
+        if TITLE_EXCLUDE.search(title):
+            reason = "puzzle"
+        hit = excluded.get(story_key(item))
+        if hit:
+            section, keep = hit
+            if keep is not None and keep.search(title):
+                print(f"RESCUED ({section})", title)
+            else:
+                reason = section
+
+        if reason:
             channel.remove(item)
             dropped += 1
+            print(f"DROP ({reason})", title)
         else:
             kept += 1
-            print("KEEP", item.findtext("title"), "|", story_key(item))
+            print("KEEP", title, "|", story_key(item))
 
     t = channel.find("title")
     if t is not None:
