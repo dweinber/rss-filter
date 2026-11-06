@@ -1,0 +1,77 @@
+#!/usr/bin/env python3
+"""Build a derStandard Newsroom feed without Diskurs items (opinion/community).
+
+Usage: python filter_feed.py [output.xml]
+
+Removes every Newsroom item whose link also appears in any EXCLUDE feed,
+plus "evergreen" items (pinned forum/community posts) older than MAX_AGE_DAYS.
+Standard library only.
+"""
+import sys
+import urllib.request
+import xml.etree.ElementTree as ET
+from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
+
+SOURCE = "https://www.derstandard.at/rss"
+EXCLUDE = [
+    "https://www.derstandard.at/rss/diskurs",
+    # add more sections to drop, e.g.:
+    # "https://www.derstandard.at/rss/etat",
+]
+MAX_AGE_DAYS = 14
+TITLE = "derStandard Newsroom (ohne Diskurs)"
+
+ET.register_namespace("media", "http://search.yahoo.com/mrss/")
+ET.register_namespace("atom", "http://www.w3.org/2005/Atom")
+
+
+def fetch(url):
+    req = urllib.request.Request(url, headers={"User-Agent": "standard-filter/1.0"})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        return ET.fromstring(r.read())
+
+
+def story_key(item):
+    """Normalise to the link without query/fragment, so tracking params don't matter."""
+    link = (item.findtext("link") or item.findtext("guid") or "").strip()
+    return link.split("?")[0].split("#")[0].rstrip("/")
+
+
+def main(out_path):
+    source = fetch(SOURCE)
+    channel = source.find("channel")
+
+    excluded = set()
+    for url in EXCLUDE:
+        for item in fetch(url).iter("item"):
+            excluded.add(story_key(item))
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=MAX_AGE_DAYS)
+    kept = dropped = 0
+    for item in list(channel.findall("item")):
+        too_old = False
+        pub = item.findtext("pubDate")
+        if pub:
+            try:
+                too_old = parsedate_to_datetime(pub) < cutoff
+            except (TypeError, ValueError):
+                pass
+        if story_key(item) in excluded or too_old:
+            channel.remove(item)
+            dropped += 1
+        else:
+            kept += 1
+
+    t = channel.find("title")
+    if t is not None:
+        t.text = TITLE
+
+    ET.ElementTree(source).write(out_path, encoding="utf-8", xml_declaration=True)
+    print(f"kept {kept}, dropped {dropped} -> {out_path}")
+    if kept == 0:
+        sys.exit("No items left - refusing to publish an empty feed")
+
+
+if __name__ == "__main__":
+    main(sys.argv[1] if len(sys.argv) > 1 else "feed.xml")
