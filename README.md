@@ -4,6 +4,7 @@ Filtered derStandard Newsroom feed: https://dweinber.github.io/rss-filter/newsro
 
 Removed:
 - Diskurs items (opinion/community) and old pinned posts
+- Web items (subscribed separately via the Web feed)
 - Sport items, except World/European Championship (WM/EM) stories
 - Puzzles and quizzes (Sudoku, Schieberätsel, Wortsuche, …)
 

@@ -23,6 +23,8 @@ TITLE = "derStandard Newsroom (gefiltert)"
 # Section feeds to drop. Value: regex of titles to KEEP anyway, or None.
 EXCLUDE = {
     "https://www.derstandard.at/rss/diskurs": None,
+    # Web: subscribed separately, so hide it here to avoid duplicates
+    "https://www.derstandard.at/rss/web": None,
     # Sport: drop everything except World/European Championship items
     "https://www.derstandard.at/rss/sport": re.compile(
         r"\b(WM|EM|Weltmeisterschaft|Europameisterschaft|Euro 20\d\d)\b"
